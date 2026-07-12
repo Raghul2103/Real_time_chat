@@ -22,11 +22,30 @@ const allowedOrigins = [
   'http://127.0.0.1:5173',
   'http://localhost:3000',
   process.env.CLIENT_URL,
-].filter(Boolean);
+]
+  .filter(Boolean)
+  .map((url) => url.replace(/\/$/, '')); // Remove trailing slashes
 
 const io = new Server(server, {
   cors: {
-    origin: allowedOrigins,
+    origin: (origin, callback) => {
+      // Allow connection if there's no origin (e.g. server-to-server or test setups)
+      if (!origin) return callback(null, true);
+
+      const normalizedOrigin = origin.replace(/\/$/, '');
+      const isAllowed = allowedOrigins.some((allowed) => {
+        return normalizedOrigin === allowed || normalizedOrigin.startsWith(allowed);
+      });
+
+      // Automatically allow Vercel domains for websocket streams
+      const isVercel = normalizedOrigin.endsWith('.vercel.app');
+
+      if (isAllowed || isVercel) {
+        callback(null, true);
+      } else {
+        callback(new Error(`Origin ${origin} not allowed by CORS`));
+      }
+    },
     credentials: true,
     methods: ['GET', 'POST'],
   },

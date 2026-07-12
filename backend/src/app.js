@@ -21,7 +21,9 @@ const allowedOrigins = [
   'http://127.0.0.1:5173',
   'http://localhost:3000',
   process.env.CLIENT_URL,
-].filter(Boolean);
+]
+  .filter(Boolean)
+  .map((url) => url.replace(/\/$/, '')); // Remove trailing slashes
 
 app.use(
   cors({
@@ -29,11 +31,15 @@ app.use(
       // Allow requests with no origin (like mobile apps, postman, or curl)
       if (!origin) return callback(null, true);
       
+      const normalizedOrigin = origin.replace(/\/$/, '');
       const isAllowed = allowedOrigins.some((allowed) => {
-        return origin === allowed || origin.startsWith(allowed);
+        return normalizedOrigin === allowed || normalizedOrigin.startsWith(allowed);
       });
+
+      // Automatically allow Vercel subdomains (for preview deployments & main Vercel links)
+      const isVercel = normalizedOrigin.endsWith('.vercel.app');
       
-      if (isAllowed) {
+      if (isAllowed || isVercel) {
         callback(null, true);
       } else {
         callback(new Error(`Origin ${origin} not allowed by CORS`));
