@@ -1,20 +1,38 @@
 import jwt from 'jsonwebtoken';
 import User from '../models/User.js';
 
+// Helper to get cookie options dynamically based on client origin
+const getCookieOptions = (req) => {
+  const origin = req.headers.origin;
+  
+  // Default to secure production cross-origin cookies
+  let secure = true;
+  let sameSite = 'none';
+  
+  // If request originates from localhost, permit standard HTTP lax cookies
+  if (origin && (origin.includes('localhost') || origin.includes('127.0.0.1'))) {
+    secure = false;
+    sameSite = 'lax';
+  }
+  
+  return {
+    httpOnly: true,
+    secure,
+    sameSite,
+    maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+  };
+};
+
 // Helper to generate JWT and set cookie
-const generateTokenAndSetCookie = (res, userId) => {
+const generateTokenAndSetCookie = (req, res, userId) => {
   const token = jwt.sign(
     { userId },
     process.env.JWT_SECRET || 'chat_app_jwt_secret_dev_key_123456789',
     { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
   );
 
-  res.cookie('jwt', token, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production', // true in production
-    sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax', // None for cross-site, Lax for dev
-    maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days in milliseconds
-  });
+  const options = getCookieOptions(req);
+  res.cookie('jwt', token, options);
 };
 
 // @desc    Register a new user
@@ -42,7 +60,7 @@ export const registerUser = async (req, res, next) => {
     });
 
     if (user) {
-      generateTokenAndSetCookie(res, user._id);
+      generateTokenAndSetCookie(req, res, user._id);
       
       res.status(201).json({
         success: true,
@@ -79,7 +97,7 @@ export const loginUser = async (req, res, next) => {
     const user = await User.findOne({ email });
 
     if (user && (await user.matchPassword(password))) {
-      generateTokenAndSetCookie(res, user._id);
+      generateTokenAndSetCookie(req, res, user._id);
 
       res.status(200).json({
         success: true,
@@ -106,9 +124,11 @@ export const loginUser = async (req, res, next) => {
 // @access  Public
 export const logoutUser = async (req, res, next) => {
   try {
+    const options = getCookieOptions(req);
     res.cookie('jwt', '', {
-      httpOnly: true,
+      ...options,
       expires: new Date(0), // expire immediately
+      maxAge: 0,
     });
     
     res.status(200).json({
