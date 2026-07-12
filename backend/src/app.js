@@ -16,9 +16,29 @@ const app = express();
 app.use(helmet());
 
 // CORS configuration (allow cookies passing from Vite client)
+const allowedOrigins = [
+  'http://localhost:5173',
+  'http://127.0.0.1:5173',
+  'http://localhost:3000',
+  process.env.CLIENT_URL,
+].filter(Boolean);
+
 app.use(
   cors({
-    origin: process.env.CLIENT_URL || 'http://localhost:5173',
+    origin: (origin, callback) => {
+      // Allow requests with no origin (like mobile apps, postman, or curl)
+      if (!origin) return callback(null, true);
+      
+      const isAllowed = allowedOrigins.some((allowed) => {
+        return origin === allowed || origin.startsWith(allowed);
+      });
+      
+      if (isAllowed) {
+        callback(null, true);
+      } else {
+        callback(new Error(`Origin ${origin} not allowed by CORS`));
+      }
+    },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
